@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import json, os, io, hashlib
 import numpy as np
+from datetime import datetime
 from sqlalchemy import create_engine, text
 from urllib.parse import quote_plus
 from sklearn.model_selection import train_test_split
@@ -11,81 +12,188 @@ from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from sklearn.pipeline import make_pipeline
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.decomposition import PCA
+from scipy.stats import f_oneway, ttest_ind, chi2_contingency
+from scipy.cluster.hierarchy import linkage
 
 # ==========================================
 # 1. UI CONFIGURATION (MUST BE FIRST ACTION)
 # ==========================================
-st.set_page_config(page_title="PhonePe Intelligence Pro", page_icon="📱", layout="wide")
+st.set_page_config(page_title="PhonePe Pulse Intelligence Pro", page_icon="📱", layout="wide")
 
-PRIMARY_COLOR = "#5F259F" 
-SECONDARY_COLOR = "#F4F7F9" 
+# Modern Enterprise Palette Mapping
+PRIMARY_COLOR = "#5F259F"    # Deep PhonePe Purple
+SECONDARY_COLOR = "#7B3FE4"  # Royal Purple Accent
+ACCENT_COLOR = "#A855F7"     # Electric Violet
+BG_COLOR = "#F5F7FA"         # Light Soft BI Canvas Slate
+TEXT_MAIN = "#1E293B"        # Dark Slate Text
 
 # ==========================================
-# 2. GLOBAL CSS CUSTOM INJECTIONS
+# 2. ADVANCED SAAS CSS ENGINE
 # ==========================================
 st.markdown(f"""
 <style>
-/* --- HIDE AUTOMATIC MULTIPAGE SIDEBAR NAVIGATION MENU --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Main Frame Overhauls */
+html, body, [data-testid="stAppViewContainer"] {{
+    font-family: 'Inter', sans-serif;
+    background-color: {BG_COLOR};
+    color: {TEXT_MAIN};
+}}
+
 [data-testid="stSidebarNav"] {{
     display: none !important;
 }}
 
-/* Main Background */
-[data-testid="stAppViewContainer"] {{
-    background-color: {SECONDARY_COLOR};
-}}
-
-/* SIDEBAR STYLING */
+/* Sidebar Enterprise Transformation */
 [data-testid="stSidebar"] {{
-    background-color: {PRIMARY_COLOR};
+    background: linear-gradient(180deg, #3A106E 0%, {PRIMARY_COLOR} 100%);
+    box-shadow: 4px 0px 20px rgba(0, 0, 0, 0.15);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
 }}
 
-
-/* Sidebar Text and Labels to White */
-[data-testid="stSidebar"] .stMarkdown,  
-[data-testid="stSidebar"] h1, 
-[data-testid="stSidebar"] h2, 
-[data-testid="stSidebar"] h3, 
-[data-testid="stSidebar"] label {{
-    color: white !important;
+[data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] label, [data-testid="stSidebar"] p {{
+    color: #F8FAFC !important;
 }}
 
-/* DOWNLOAD BUTTON STYLING */
+/* FIXED SIDEBAR BUTTON OVERRIDES: Clear background contrast with distinct action colors */
+div[data-testid="stSidebar"] button {{
+    background-color: #FFFFFF !important;
+    color: {PRIMARY_COLOR} !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1rem !important;
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.1) !important;
+    transition: all 0.2s ease;
+}}
+
+div[data-testid="stSidebar"] button:hover {{
+    background-color: #E63946 !important; 
+    color: #FFFFFF !important;
+    border-color: #E63946 !important;
+    box-shadow: 0px 4px 12px rgba(230, 57, 70, 0.4) !important;
+}}
+
+/* Premium Hero Section */
+.hero-banner {{
+    background: linear-gradient(135deg, #3A106E 0%, {PRIMARY_COLOR} 50%, {SECONDARY_COLOR} 100%);
+    border-radius: 16px;
+    padding: 35px 45px;
+    color: white;
+    margin-bottom: 30px;
+    box-shadow: 0px 12px 35px rgba(95, 37, 159, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid rgba(255,255,255,0.1);
+}}
+
+.hero-logo-box {{
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    padding: 8px 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-weight: 800;
+    font-size: 1.5rem;
+    letter-spacing: -0.5px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}}
+
+/* Glassmorphism Metric Processing Engine */
+.bi-kpi-card {{
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0px 8px 24px rgba(148, 163, 184, 0.05);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-bottom: 20px;
+}}
+
+.bi-kpi-card:hover {{
+    transform: translateY(-4px);
+    box-shadow: 0px 12px 30px rgba(95, 37, 159, 0.12);
+    border-color: rgba(123, 63, 228, 0.4);
+}}
+
+.kpi-title {{
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #64748B;
+    font-weight: 600;
+    margin-bottom: 8px;
+}}
+
+.kpi-value {{
+    font-size: 2rem;
+    font-weight: 700;
+    color: {PRIMARY_COLOR};
+    line-height: 1.1;
+}}
+
+.kpi-subtext {{
+    font-size: 0.75rem;
+    color: #94A3B8;
+    margin-top: 6px;
+}}
+
+/* Premium Continuous Static Dashboard Panels */
+.ai-insight-panel {{
+    background: linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%);
+    border-left: 6px solid {PRIMARY_COLOR};
+    border-radius: 12px;
+    padding: 22px;
+    box-shadow: 0px 6px 18px rgba(0,0,0,0.02);
+    margin: 20px 0;
+}}
+
+.ai-header {{
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: {PRIMARY_COLOR};
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}}
+
+/* Main Mainframe Download Button Styling */
 div.stDownloadButton > button {{
-    background-color: white !important;
-    color: black !important; 
-    border: 2px solid #E0E0E0;
-    border-radius: 8px;
-    padding: 0.5rem 1rem;
-    width: 100%;
-}}
-
-div.stDownloadButton > button p {{
-    color: black !important;
-    font-weight: normal !important;
+    background: linear-gradient(135deg, {SECONDARY_COLOR} 0%, {PRIMARY_COLOR} 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 0.7rem 1.4rem !important;
+    font-weight: 600 !important;
+    box-shadow: 0px 4px 14px rgba(95, 37, 159, 0.3) !important;
+    transition: all 0.2s ease !important;
 }}
 
 div.stDownloadButton > button:hover {{
-    background-color: #f0f0f0 !important;
-    border-color: {PRIMARY_COLOR};
+    transform: translateY(-1px) !important;
+    box-shadow: 0px 6px 20px rgba(95, 37, 159, 0.45) !important;
 }}
 
-/* Metric Card Styling */
-.stMetric {{
-    background: white; 
-    padding: 20px; 
-    border-radius: 10px; 
-    border: 1px solid #E0E0E0;
-    box-shadow: 0px 2px 4px rgba(0,0,0,0.02);
+/* Tab Selection Custom UI Element */
+div[data-testid="stTabs"] button {{
+    font-weight: 600 !important;
+    color: #64748B !important;
+    background-color: transparent !important;
+    border: none !important;
+    padding: 12px 24px !important;
 }}
 
-.insight-box {{
-    background-color: #ffffff; padding: 20px; border-radius: 8px;
-    border-left: 5px solid {PRIMARY_COLOR}; margin: 15px 0;
-    box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+div[data-testid="stTabs"] button[aria-selected="true"] {{
+    color: {PRIMARY_COLOR} !important;
+    border-bottom: 3px solid {PRIMARY_COLOR} !important;
 }}
-
-h1, h2, h3 {{color: {PRIMARY_COLOR};}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -101,7 +209,6 @@ USERS_FILE_PATH = os.path.join(CONFIG_DIR, "users.json")
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Fixed local baseline configurations
 DEFAULT_USERS = {
     "admin": hash_password("admin123"),
     "faculty": hash_password("faculty123"),
@@ -123,7 +230,7 @@ def save_users(users_dict):
         with open(USERS_FILE_PATH, 'w') as f:
             json.dump(users_dict, f, indent=4)
     except Exception as e:
-        st.error(f"Error synchronization database: {e}")
+        st.error(f"Error synchronizing database: {e}")
 
 USERS_PROFILE = load_users()
 
@@ -147,7 +254,7 @@ def render_login_portal():
                 with st.form("access_gate_form"):
                     user_input = st.text_input("Corporate Username", placeholder="e.g., admin or kousar")
                     pass_input = st.text_input("Secure Passkey", type="password", placeholder="••••••••")
-                    login_clicked = st.form_submit_button("Authenticate Access", use_container_width=True)
+                    login_clicked = st.form_submit_button("Authenticate Access", width='stretch')
                     
                     if login_clicked:
                         current_users = load_users()
@@ -166,7 +273,7 @@ def render_login_portal():
                     new_user = st.text_input("Choose Username", placeholder="Enter unique username").strip().lower()
                     new_pass = st.text_input("Create Password", type="password", placeholder="Minimum 4 characters")
                     confirm_pass = st.text_input("Confirm Password", type="password", placeholder="Re-type password")
-                    register_clicked = st.form_submit_button("Register New User", use_container_width=True)
+                    register_clicked = st.form_submit_button("Register New User", width='stretch')
                     
                     if register_clicked:
                         current_users = load_users()
@@ -206,7 +313,7 @@ def load_base_data():
         df['transaction_type'] = df['category']
     if 'count' in df.columns: 
         df['transaction_count'] = df['count']
-    else:
+    elif 'transaction_count' in df.columns:
         df['count'] = df['transaction_count']
     df['state'] = df['state'].str.lower()
     return df
@@ -252,59 +359,63 @@ def format_intl_qty(number):
     else:
         return f"{number:,}"
 
-# --- BRANDING HEADER ---
-st.markdown("""
-<div style='text-align:center'>
-<img src="https://download.logo.wine/logo/PhonePe/PhonePe-Logo.wine.png" width="160">
-<h2 style='margin-top: -10px; font-weight: 700;'>AI-Powered Transaction Insights Platform</h2>
+# ==========================================
+# 7. PREMIUM ATTRACTIVE HERO BANNER OVERHAUL
+# ==========================================
+current_dt = datetime.now().strftime("%A, %B %d, %Y")
+st.markdown(f"""
+<div class="hero-banner">
+    <div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div class="hero-logo-box">🟪 PhonePe</div>
+            <h1 style='margin:0; font-size:2.2rem; font-weight:700; color:white !important; letter-spacing: -0.5px;'>Pulse Intelligence</h1>
+        </div>
+        <p style='margin:8px 0 0 0; opacity:0.85; font-size:1.05rem; color:white !important; font-weight: 400;'>AI-Powered Transaction Analytics & Enterprise Business Intelligence Platform</p>
+    </div>
+    <div style='text-align: right; opacity:0.95;'>
+        <div style='font-weight:600; font-size:0.95rem; letter-spacing: 0.3px;'>{current_dt}</div>
+        <div style='font-size:0.8rem; font-weight:600; margin-top:6px; background:rgba(255,255,255,0.2); padding:4px 14px; border-radius:20px; display:inline-block; border: 1px solid rgba(255,255,255,0.2);'>
+            👤 Operator: {st.session_state.username.title()}
+        </div>
+    </div>
 </div>
-<hr style="margin-bottom: 25px;">
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 7. EXECUTIVE INTELLIGENCE SUMMARY BAR
+# 8. SIDEBAR CONTROLS
 # ==========================================
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric("States Analysed", df["state"].nunique())
-with col2:
-    st.metric("Total Transactions", format_intl_qty(df["transaction_count"].sum()))
-with col3:
-    st.metric("Aggregate Value", format_intl_amount(df["amount"].sum()))
-with col4:
-    st.metric("Transaction Categories", df["transaction_type"].nunique() if "transaction_type" in df.columns else df["category"].nunique())
+st.sidebar.markdown(f"""
+<div style="background:rgba(255,255,255,0.08); padding:16px; border-radius:12px; margin-bottom:25px; border:1px solid rgba(255,255,255,0.12);">
+    <div style="font-size:0.75rem; text-transform:uppercase; opacity:0.6; font-weight:700; letter-spacing:0.5px;">Active Profile</div>
+    <div style="font-size:1.15rem; font-weight:700; margin-top:2px; color:#FFFFFF;">{st.session_state.username.title()}</div>
+    <div style="font-size:0.7rem; opacity:0.5; margin-top:1px;">Authorized Data Stream Access</div>
+</div>
+""", unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ==========================================
-# 8. SIDEBAR CONTROLS (FIXED ACCESSIBLE TEXT)
-# ==========================================
-st.sidebar.markdown(f"### 👤 Active Profile: **{st.session_state.username.title()}**")
-st.sidebar.markdown("---")
-
+st.sidebar.markdown("### 🗺️ Contextual Domain Filters")
 state_list = sorted(df['state'].unique())
-selected_state = st.sidebar.selectbox("🗺️ 1. State Context Selection", state_list)
+selected_state = st.sidebar.selectbox("1. Geographic Territory", state_list)
 
 dist_df = load_district_data(selected_state)
 pin_df = load_pincode_data(selected_state)
 
 district_list = sorted(dist_df['district'].unique()) if not dist_df.empty else []
-selected_district = st.sidebar.selectbox("🔍 2. District Filter", ["All Districts"] + district_list)
-
-selected_year = st.sidebar.selectbox("📅 3. Fiscal Year Focus", sorted(df['year'].unique()))
+selected_district = st.sidebar.selectbox("2. Micro District Target", ["All Districts"] + district_list)
+selected_year = st.sidebar.selectbox("3. Temporal Fiscal Year", sorted(df['year'].unique()))
 
 st.sidebar.markdown("---")
-target_metric = st.sidebar.radio("📊 Target Display Metric", ["amount", "transaction_count"], 
+st.sidebar.markdown("### 📊 Metrics Engine Target")
+target_metric = st.sidebar.radio("Active Ledger Target", ["amount", "transaction_count"], 
                                 format_func=lambda x: "Value (₹)" if x == "amount" else "Volume Count")
 
-st.sidebar.markdown("<br><br>", unsafe_allow_html=True)
-if st.sidebar.button("🔒 Terminate User Session", use_container_width=True):
+st.sidebar.markdown("<br>", unsafe_allow_html=True)
+if st.sidebar.button("🔒 Terminate User Session", width='stretch'):
     st.session_state.logged_in = False
     st.session_state.username = ""
     st.rerun()
-    
+
 # ==========================================
-# 9. VISUALS CHART ENGINE
+# 9. VISUALS CHART ENGINE (FIXED PLOTLY OVERRIDES)
 # ==========================================
 def render_pro_chart(data, x, y, title, c_type, color=None):
     seq = px.colors.qualitative.Prism if color is not None else [PRIMARY_COLOR]
@@ -320,7 +431,20 @@ def render_pro_chart(data, x, y, title, c_type, color=None):
             data[color] = data[color].astype(str)
         fig = px.scatter(data, x=x, y=y, color=color, title=title, template="plotly_white", color_discrete_sequence=seq)
     
-    fig.update_layout(margin=dict(l=20, r=20, t=40, b=20))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", 
+        plot_bgcolor="rgba(0,0,0,0)",  
+        font_family="Inter",
+        title_font_size=15,
+        title_font_color="#1E293B",
+        margin=dict(l=10, r=10, t=60, b=10),
+        legend=dict(bgcolor="rgba(255,255,255,0.7)", bordercolor="#E2E8F0", borderwidth=1)
+    )
+    fig.update_xaxes(showgrid=False, linecolor="#E2E8F0", title="")
+    fig.update_yaxes(showgrid=True, gridcolor="#F1F5F9", linecolor="#E2E8F0", title="")
+    
+    # --- FIXED ASH OVERRIDES LOGIC ---
+    fig.show(config={'modeBarButtonsToRemove': ['zoom', 'pan', 'select', 'lasso2d'], 'displayModeBar': 'hover'})
     return fig
 
 # ==========================================
@@ -354,11 +478,29 @@ with tab1:
         
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.metric("Context-Specific Value", format_intl_amount(total_amt))
+            st.markdown(f"""
+            <div class="bi-kpi-card">
+                <div class="kpi-title">💰 Context-Specific Value</div>
+                <div class="kpi-value">{format_intl_amount(total_amt)}</div>
+                <div class="kpi-subtext">Selected Domain Yield</div>
+            </div>
+            """, unsafe_allow_html=True)
         with c2:
-            st.metric("Context-Specific Volume", format_intl_qty(total_vol))
+            st.markdown(f"""
+            <div class="bi-kpi-card">
+                <div class="kpi-title">📈 Context-Specific Volume</div>
+                <div class="kpi-value">{format_intl_qty(total_vol)}</div>
+                <div class="kpi-subtext">Selected Segment Inflows</div>
+            </div>
+            """, unsafe_allow_html=True)
         with c3:
-            st.metric("Avg. Basket Ticket Size", f"₹ {avg_ticket:,.2f}")
+            st.markdown(f"""
+            <div class="bi-kpi-card">
+                <div class="kpi-title">🛒 Avg. Basket Ticket Size</div>
+                <div class="kpi-value">₹ {avg_ticket:,.2f}</div>
+                <div class="kpi-subtext">Ticket Breakdown Value</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("---")
     col_chart, col_pincode = st.columns([3, 2])
@@ -368,7 +510,7 @@ with tab1:
         year_data = df[df['state'] == selected_state].groupby('year')[target_metric].sum().reset_index()
         st.plotly_chart(render_pro_chart(year_data, 'year', target_metric, 
                                         f"Macro Dynamic Trend Over Time: {selected_state.title()}", chart_choice), 
-                        use_container_width=True)
+                        width='stretch')
 
     with col_pincode:
         st.markdown("##### 📍 Top 10 High-Velocity Pincodes")
@@ -378,64 +520,50 @@ with tab1:
             top_pins['count'] = top_pins['count'].apply(format_intl_qty)
             
             st.dataframe(top_pins[['pincode', 'count', 'amount']], 
-                         use_container_width=True, hide_index=True)
+                         width='stretch', hide_index=True)
         else:
             st.info("Pincode distribution metrics unavailable inside this selected geographical bounds.")
 
 # ---- TAB 2: INDIA HEATMAP ----
 with tab2:
-
     st.subheader("🌍 National Transaction Density Heatmap")
 
     df['state_clean'] = df['state'].str.replace("-", " ", regex=False).str.replace("&", "and", regex=False).str.strip().str.title()
-
     state_mapping = {"Andaman And Nicobar Islands": "Andaman and Nicobar Islands", "Nct Of Delhi": "Delhi", "Jammu And Kashmir": "Jammu & Kashmir"}
-
     df['state_clean'] = df['state_clean'].replace(state_mapping)
-
-
 
     geo_path = os.path.join(os.path.dirname(__file__), "india_states.geojson")
 
     try:
-
         with open(geo_path) as f:
-
             geojson = json.load(f)
 
         KEY = next((k for k in ['ST_NM', 'state', 'NAME_1', 'name'] if k in geojson['features'][0]['properties']), None)
 
         if KEY:
-
             map_data = df.groupby('state_clean')[target_metric].sum().reset_index()
 
             fig_map = px.choropleth(map_data, geojson=geojson, featureidkey=f"properties.{KEY}", locations="state_clean", color=target_metric, color_continuous_scale="Turbo")
-
             fig_map.update_geos(fitbounds="locations", visible=False)
+            fig_map.update_layout(margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)")
 
-            fig_map.update_layout(margin=dict(l=0, r=0, t=10, b=0))
-
-            st.plotly_chart(fig_map, use_container_width=True)
-
-            
+            st.plotly_chart(fig_map, width='stretch')
 
             top_map_state = map_data.sort_values(target_metric, ascending=False).iloc[0]
 
-            
-
-            with st.expander("💡 View Geographic Market Insight", expanded=True):
-
-                st.markdown(f"""
-
-                The national heatmap illustrates clear spatial variations in payment volume across territories. 
-
-                Currently, **{top_map_state['state_clean']}** holds the position of national volume leader, acting as a crucial indicator for high-velocity user hubs.
-
-                """)
+            st.markdown(f"""
+            <div class="ai-insight-panel">
+                <div class="ai-header">🤖 AUTOMATED GEOGRAPHIC MARKET INSIGHT</div>
+                <div style="font-size:0.95rem; line-height:1.5;">
+                    The national heatmap illustrates clear spatial variations in payment volume across territories. 
+                    Currently, <b>{top_map_state['state_clean']}</b> holds the position of national volume leader, acting as a crucial indicator for high-velocity user hubs.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     except Exception:
-
         st.error("GeoJSON mapping structure missing or corrupt from root runtime directory path environment.")
+
 # ---- TAB 3: AI ANALYTICS HUB ----
 with tab3:
     st.subheader("🧠 Multi-Dimensional Cluster Segmentation")
@@ -444,29 +572,36 @@ with tab3:
         X = StandardScaler().fit_transform(cluster_df[['amount', 'count']])
         cluster_df['cluster'] = KMeans(n_clusters=3, random_state=42, n_init=10).fit_predict(X)
         
-        st.plotly_chart(render_pro_chart(cluster_df, 'count', 'amount', "District Structural Tier Separation Clustering", "Scatter", color='cluster'), use_container_width=True)
+        st.plotly_chart(render_pro_chart(cluster_df, 'count', 'amount', "District Structural Tier Separation Clustering", "Scatter", color='cluster'), width='stretch')
         
-        with st.expander("💡 View K-Means Diagnostic Insights", expanded=True):
+        st.markdown("""
+        <div class="ai-insight-panel">
+            <div class="ai-header">🤖 K-MEANS UNSUPERVISED METRIC INFERENCE</div>
+            <div style="font-size:0.95rem; line-height:1.5;">
+                Districts are categorized into three operational segments based on flow velocity and underlying volume. 
+                High-yield clusters grouped near the top right suggest ideal environments for prioritizing high-impact merchant onboarding and resource deployment.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("#### 📊 Agglomerative Hierarchical Analytics Lineage")
+        if len(cluster_df) >= 2:
+            linked = linkage(cluster_df[['amount', 'count']], method='ward')
+            st.success("Hierarchical clustering matrix linkages parsed and resolved successfully.")
+            fig_dendro = px.bar(cluster_df.sort_values(by='amount', ascending=False), x='district', y='amount', title="Volume Hierarchical Profile Segmentation View")
+            st.plotly_chart(fig_dendro, width='stretch')
+            
             st.markdown("""
-            Districts are categorized into three operational segments based on flow velocity and underlying volume. 
-            High-yield clusters grouped near the top right suggest ideal environments for prioritizing high-impact merchant onboarding and resource deployment.
-            """)
-        
-        with st.expander("📊 Agglomerative Hierarchical Analytics Lineage"):
-            from scipy.cluster.hierarchy import linkage
-            if len(cluster_df) >= 2:
-                linked = linkage(cluster_df[['amount', 'count']], method='ward')
-                st.success("Hierarchical clustering matrix linkages parsed and resolved successfully.")
-                fig_dendro = px.bar(cluster_df.sort_values(by='amount', ascending=False), x='district', y='amount', title="Volume Hierarchical Profile Segmentation View")
-                st.plotly_chart(fig_dendro, use_container_width=True)
-                
-                with st.expander("💡 View Hierarchical Structural Insight"):
-                    st.markdown("""
+            <div class="ai-insight-panel">
+                <div class="ai-header">🤖 LINKAGE STRUCTURAL ANALYSIS</div>
+                <div style="font-size:0.95rem; line-height:1.5;">
                     This linkage framework assesses structural similarity markers across commercial districts. 
                     Tracking these localized customer similarities helps identify regions displaying consistent digital behaviors.
-                    """)
-            else:
-                st.info("Insufficient entries inside contextual slice to establish linkage chains.")
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Insufficient entries inside contextual slice to establish linkage chains.")
     else:
         st.info("No district metrics loaded for execution of structural clustering modules.")
 
@@ -484,7 +619,6 @@ with tab4:
 
     # ANOVA
     with stat1:
-        from scipy.stats import f_oneway
         top_states = df.groupby("state")["amount"].sum().sort_values(ascending=False).head(10).index
         groups = [df[df["state"] == s]["amount"].dropna() for s in top_states]
 
@@ -497,18 +631,21 @@ with tab4:
             if not np.isnan(p_val) and p_val < 0.05:
                 st.success("Significant Variance Found: True.")
             
-            with st.expander("💡 View ANOVA Business Insights", expanded=True):
-                st.markdown("""
-                The F-statistic gauges revenue variance differences among the top ten regions. 
-                A low P-value (<0.05) confirms that these performance variances represent structurally significant differences rather than random noise, 
-                supporting the use of distinct, regionalized product frameworks.
-                """)
+            st.markdown("""
+            <div class="ai-insight-panel">
+                <div class="ai-header">🤖 SIGNIFICANCE TESTING FEEDBACK</div>
+                <div style="font-size:0.95rem; line-height:1.5;">
+                    The F-statistic gauges revenue variance differences among the top ten regions. 
+                    A low P-value (&lt;0.05) confirms that these performance variances represent structurally significant differences rather than random noise, 
+                    supporting the use of distinct, regionalized product frameworks.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.warning("Data matrices too sparse across cross-sections to determine variance ratios.")
 
     # T-TEST
     with stat2:
-        from scipy.stats import ttest_ind
         state_totals = df.groupby("state")["amount"].sum().sort_values()
         bottom = state_totals.head(10).index
         top = state_totals.tail(10).index
@@ -522,17 +659,20 @@ with tab4:
             c1.metric("T-Value Coefficient Matrix", f"{t_stat:.4f}" if not np.isnan(t_stat) else "N/A")
             c2.metric("P-Value Confidence Limit", f"{p_val:.8f}" if not np.isnan(p_val) else "N/A")
             
-            with st.expander("💡 View T-Test Business Insights", expanded=True):
-                st.markdown("""
-                This two-sample comparison measures the structural variance gap between the highest and lowest performing state clusters. 
-                The calculated t-statistic provides a metric for the digital gap, indicating locations where infrastructure support is needed most.
-                """)
+            st.markdown("""
+            <div class="ai-insight-panel">
+                <div class="ai-header">🤖 GAUSSIAN TWO-SAMPLE GAP INFERENCE</div>
+                <div style="font-size:0.95rem; line-height:1.5;">
+                    This two-sample comparison measures the structural variance gap between the highest and lowest performing state clusters. 
+                    The calculated t-statistic provides a metric for the digital gap, indicating locations where infrastructure support is needed most.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.warning("Insufficient entries inside target extreme groupings to establish distribution variances.")
 
     # CHI-SQUARE
     with stat3:
-        from scipy.stats import chi2_contingency
         if 'transaction_type' in df.columns:
             contingency_table = pd.crosstab(df['state'], df['transaction_type'])
             if not contingency_table.empty and contingency_table.size > 4:
@@ -541,11 +681,15 @@ with tab4:
                 cx1.metric("Chi-Square Test Score Statistic", f"{chi2:.2f}")
                 cx2.metric("Asymptotic P-Value Value", f"{p:.8f}")
                 
-                with st.expander("💡 View Categorical Distribution Insights", expanded=True):
-                    st.markdown("""
-                    This test evaluates whether preference for payment categories is statistically linked to geographic location. 
-                    A significant p-value implies that consumer choice profiles change based on regional trends, suggesting that merchant onboarding choices should be tailored to local demand.
-                    """)
+                st.markdown("""
+                <div class="ai-insight-panel">
+                    <div class="ai-header">🤖 CATEGORICAL DISTRIBUTION ANALYSIS</div>
+                    <div style="font-size:0.95rem; line-height:1.5;">
+                        This test evaluates whether preference for payment categories is statistically linked to geographic location. 
+                        A significant p-value implies that consumer choice profiles change based on regional trends, suggesting that merchant onboarding choices should be tailored to local demand.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             else:
                 st.info("Cross-tabulation framework results are flat.")
         else:
@@ -566,17 +710,20 @@ with tab4:
             st.metric("R² Score Coefficient (Explained Variance Mapping)", f"{score:.4f}")
             st.progress(float(max(0.0, min(score, 1.0))))
             
-            with st.expander("💡 View Regression Pipeline Insights", expanded=True):
-                st.markdown("""
-                The $R^2$ score indicates how well changes in transaction timing and volume explain overall transacted value. 
-                A higher value suggests stronger financial consistency, offering dependable parameters for quarterly cash flow projections.
-                """)
+            st.markdown("""
+            <div class="ai-insight-panel">
+                <div class="ai-header">🤖 REGRESSION MODEL ESTIMATION FEEDBACK</div>
+                <div style="font-size:0.95rem; line-height:1.5;">
+                    The $R^2$ score indicates how well changes in transaction timing and volume explain overall transacted value. 
+                    A higher value suggests stronger financial consistency, offering dependable parameters for quarterly cash flow projections.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.warning("Feature sets row count insufficient to construct standard split-sample linear lines.")
 
     # PCA
     with stat5:
-        from sklearn.decomposition import PCA
         pca_features = df[["year", "quarter", "transaction_count", "amount"]].dropna()
 
         if len(pca_features) > 5:
@@ -590,13 +737,17 @@ with tab4:
             })
 
             fig_pca = px.bar(pca_df, x="Component", y="Variance Ratio", title="Information Retention Ratio by Principal Components", template="plotly_white", color_discrete_sequence=[PRIMARY_COLOR])
-            st.plotly_chart(fig_pca, use_container_width=True)
+            st.plotly_chart(fig_pca, width='stretch')
             
-            with st.expander("💡 View Structural Dimensionality Insights", expanded=True):
-                st.markdown("""
-                PCA condenses multiple operational variables down into primary underlying factors. 
-                The scree bar distribution charts the information retention rate per principal component, highlighting the primary metrics influencing core ledger growth.
-                """)
+            st.markdown("""
+            <div class="ai-insight-panel">
+                <div class="ai-header">🤖 ORTHOGONAL DIMENSIONAL VARIANCE ANALYSIS</div>
+                <div style="font-size:0.95rem; line-height:1.5;">
+                    PCA condenses multiple operational variables down into primary underlying factors. 
+                    The scree bar distribution charts the information retention rate per principal component, highlighting the primary metrics influencing core ledger growth.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.warning("Data footprint density too low to resolve structural eigenvector matrix reductions.")
 
@@ -647,11 +798,17 @@ with tab5:
 
         # 3. Large Clear Visual Chart Block
         combined = pd.concat([all_y.assign(Status='Historical'), future.assign(Status='Forecast')])
-        st.plotly_chart(render_pro_chart(combined, 'year', target_metric, f"Forward Trend Projections: Year Horizon {future_years[-1]}", t4_choice, color='Status'), use_container_width=True)
+        st.plotly_chart(render_pro_chart(combined, 'year', target_metric, f"Forward Trend Projections: Year Horizon {future_years[-1]}", t4_choice, color='Status'), width='stretch')
         
         # 4. Standard Business Expander
-        with st.expander("💡 View Predictive Intelligence Insights", expanded=True):
-            st.markdown(f"Based on historical growth trends, future performance projections indicate a **{'steady expansion' if growth_pct > 0 else 'market correction'}** trajectory over the upcoming fiscal periods through to **{future_years[-1]}**. These indicators provide helpful guideboards for managing regional market expectations and scaling processing capacities.")
+        st.markdown(f"""
+        <div class="ai-insight-panel">
+            <div class="ai-header">🤖 TIME-SERIES PREDICTIVE INSIGHTS PANEL</div>
+            <div style="font-size:0.95rem; line-height:1.5;">
+                Based on historical growth trends, future performance projections indicate a <b>{"steady expansion" if growth_pct > 0 else "market correction"}</b> trajectory over the upcoming fiscal periods through to <b>{future_years[-1]}</b>. These indicators provide helpful guideboards for managing regional market expectations and scaling processing capacities.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     else:
         st.warning("Insufficient continuous historical baseline timelines to fit structural auto-regressive prediction pathways.")
 
@@ -670,41 +827,61 @@ with tab6:
     with sql_subtab1:
         st.markdown("##### **Top Contributing Jurisdictions**")
         if not top_states_raw.empty:
-            st.plotly_chart(render_pro_chart(top_states_raw, 'state', 'total', "Top 10 High-Revenue States Summary", t5_choice), use_container_width=True)
+            st.plotly_chart(render_pro_chart(top_states_raw, 'state', 'total', "Top 10 High-Revenue States Summary", t5_choice), width='stretch')
             
             # Display only top 5 rows to minimize screen clutter
             top_states_disp = top_states_raw.copy()
             top_states_disp['total'] = top_states_disp['total'].apply(format_intl_amount)
-            st.dataframe(top_states_disp.head(5), use_container_width=True, hide_index=True)
+            st.dataframe(top_states_disp.head(5), width='stretch', hide_index=True)
             
-            with st.expander("📋 View Complete States Dataset Result Matrix"):
-                st.dataframe(top_states_disp, use_container_width=True, hide_index=True)
+            st.markdown("#### 📋 Complete States Dataset Result Matrix")
+            st.dataframe(top_states_disp, width='stretch', hide_index=True)
 
-            with st.expander("💡 View Regional Data Insights", expanded=True):
-                st.markdown(f"Geographic transaction logs show that **{top_states_raw.iloc[0]['state'].title()}** contributes the highest overall volume to ledger inflows. Focusing resource allocation on these key areas helps ensure strong investment returns.")
+            st.markdown(f"""
+            <div class="ai-insight-panel">
+                <div class="ai-header">🤖 GEOGRAPHIC LEDGER INTERPRETATION</div>
+                <div style="font-size:0.95rem; line-height:1.5;">
+                    Geographic transaction logs show that <b>{top_states_raw.iloc[0]['state'].title()}</b> contributes the highest overall volume to ledger inflows. Focusing resource allocation on these key areas helps ensure strong investment returns.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     # Subtab 2: Category Stream Performance Matrix
     with sql_subtab2:
         st.markdown("##### **Product Stream Categorical Split**")
         if not cat_perf_raw.empty:
-            st.plotly_chart(render_pro_chart(cat_perf_raw, 'category', 'total', "Transaction Volume Split by Product Stream", t5_choice), use_container_width=True)
+            st.plotly_chart(render_pro_chart(cat_perf_raw, 'category', 'total', "Transaction Volume Split by Product Stream", t5_choice), width='stretch')
             
             # Display only top 5 rows to minimize screen clutter
             cat_perf_disp = cat_perf_raw.copy()
             cat_perf_disp['total'] = cat_perf_disp['total'].apply(format_intl_amount)
-            st.dataframe(cat_perf_disp.head(5), use_container_width=True, hide_index=True)
+            st.dataframe(cat_perf_disp.head(5), width='stretch', hide_index=True)
             
-            with st.expander("📋 View Complete Categories Dataset Result Matrix"):
-                st.dataframe(cat_perf_disp, use_container_width=True, hide_index=True)
+            st.markdown("#### 📋 Complete Categories Dataset Result Matrix")
+            st.dataframe(cat_perf_disp, width='stretch', hide_index=True)
 
-            with st.expander("💡 View Product Stream Insights", expanded=True):
-                st.markdown(f"Product performance logs indicate that **{cat_perf_raw.iloc[0]['category'].title()}** transactions serve as the primary driver of platform value. Aligning marketing campaigns with these user preferences supports consistent platform engagement.")
+            st.markdown(f"""
+            <div class="ai-insight-panel">
+                <div class="ai-header">🤖 SEGMENT BREAKDOWN INTERPRETATION</div>
+                <div style="font-size:0.95rem; line-height:1.5;">
+                    Product performance logs indicate that <b>{cat_perf_raw.iloc[0]['category'].title()}</b> transactions serve as the primary driver of platform value. Aligning marketing campaigns with these user preferences supports consistent platform engagement.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
 # ==========================================
-# 11. FOOTER CONTROL BAR
+# 11. ENTERPRISE FOOTER CONTROL BAR
 # ==========================================
 st.sidebar.markdown("---")
 st.sidebar.write("📤 **Data Export Framework**")
 csv = df.to_csv(index=False).encode('utf-8')
 st.sidebar.download_button("📩 Download Complete Dataset Report", data=csv, file_name=f"PhonePe_Insights_{selected_year}.csv", mime='text/csv')
 st.sidebar.caption("Data Source: Multi-Level PhonePe Analytics (MySQL Enterprise)")
-st.markdown("<hr><center style='color:#777777; font-size:13px;'>Developed by Heena Kousar | Advanced Management Edition v5.0</center>", unsafe_allow_html=True)
+
+st.markdown(f"""
+<hr style="border-color:rgba(0,0,0,0.05); margin-top:50px;">
+<div style="text-align:center; color:#94A3B8; font-size:0.85rem; padding:10px 0; font-weight:500;">
+    <b>PhonePe Pulse Enterprise Portal v6.0</b> | Built with Python • SQL • Streamlit • Machine Learning Frameworks <br>
+    &copy; 2026 <b>Heena Kousar</b> | All Rights Reserved
+</div>
+""", unsafe_allow_html=True)
